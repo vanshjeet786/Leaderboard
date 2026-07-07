@@ -27,8 +27,7 @@ function App() {
     setLoading(true);
     try {
       const { data, error } = await supabase.rpc('create_game_id', {
-        GAME_ID: gameName,
-        LIMIT: 0 // The function signature includes a LIMIT parameter
+        in_game_name: gameName
       });
 
       if (error) throw error;
@@ -98,7 +97,7 @@ function App() {
           <section className="bg-gray-800 p-6 rounded-xl shadow-xl border border-gray-700">
             <h2 className="text-xl font-semibold mb-6 flex items-center">
               <span className="bg-indigo-500 w-2 h-6 rounded mr-3"></span>
-              Generate Game ID
+              Generate Unique Game ID
             </h2>
             <form onSubmit={handleGenerateGameId} className="space-y-4">
               <div>
@@ -116,13 +115,22 @@ function App() {
                 disabled={loading}
                 className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-800 py-2 rounded-lg font-medium transition-colors"
               >
-                {loading ? 'Processing...' : 'Generate ID'}
+                {loading ? 'Processing...' : 'Generate Cryptic ID'}
               </button>
             </form>
             {generatedGameId && (
               <div className="mt-6 p-4 bg-gray-900 rounded-lg border border-gray-700">
                 <p className="text-sm text-gray-400 mb-1">Generated Game ID:</p>
                 <code className="text-indigo-400 font-mono break-all">{generatedGameId}</code>
+                <button
+                  onClick={() => {
+                    setScoreGameId(generatedGameId);
+                    showAlert('Copied to Score Update form', 'info');
+                  }}
+                  className="mt-2 block text-xs text-indigo-300 hover:text-indigo-200"
+                >
+                  Use for score update
+                </button>
               </div>
             )}
           </section>

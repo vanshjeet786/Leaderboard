@@ -1,3 +1,112 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ===== Base ===== */
+@layer base {
+  body {
+    @apply bg-slate-950 text-gray-200 font-sans;
+  }
+
+  ::selection {
+    @apply bg-purple-500/30 text-white;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-700 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-600;
+  }
+}
+
+/* ===== Components ===== */
+@layer components {
+  /* Glassmorphism form card */
+  .score-form-card {
+    @apply bg-slate-900/50 backdrop-blur-xl rounded-2xl p-6
+           border border-slate-700/30
+           shadow-xl shadow-purple-900/5
+           transition-all duration-500;
+  }
+  .score-form-card:hover {
+    @apply border-slate-600/40 shadow-purple-900/10;
+  }
+
+  /* Leaderboard card */
+  .leaderboard-card {
+    @apply bg-slate-900/30 backdrop-blur-sm rounded-2xl p-6
+           border border-slate-700/20;
+  }
+
+  /* Gaming-style inputs */
+  .form-input-gaming {
+    @apply w-full bg-slate-800/50 border border-slate-700/40 rounded-xl
+           px-4 py-2.5 text-sm text-gray-200
+           placeholder-gray-600
+           outline-none
+           transition-all duration-300;
+  }
+  .form-input-gaming:focus {
+    @apply border-purple-500/50 ring-2 ring-purple-500/20
+           bg-slate-800/80 shadow-lg shadow-purple-900/10;
+  }
+
+  /* Gradient submit button */
+  .btn-submit-gaming {
+    @apply py-3 rounded-xl font-semibold text-sm uppercase tracking-wider
+           bg-gradient-to-r from-purple-600 to-cyan-600
+           text-white
+           shadow-lg shadow-purple-900/30
+           transition-all duration-300;
+  }
+  .btn-submit-gaming:hover:not(:disabled) {
+    @apply shadow-xl shadow-purple-700/40 brightness-110 scale-[1.02];
+  }
+  .btn-submit-gaming:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+  .btn-submit-gaming:active:not(:disabled) {
+    @apply scale-[0.98];
+  }
+}
+
+/* ===== Utilities ===== */
+@layer utilities {
+  /* Animated gradient background */
+  .bg-gradient-animate {
+    background: linear-gradient(
+      -45deg,
+      #1e1b4b,
+      #0f172a,
+      #042f2e,
+      #1e1b4b,
+      #0c0a09
+    );
+    background-size: 400% 400%;
+    animation: gradientShift 15s ease infinite;
+  }
+}
+
+/* ===== Keyframes (outside Tailwind layers for browser compat) ===== */
+@keyframes gradientShift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  25% {
+    background-position: 100% 0%;
+  }
+  50% {
+    background-position: 100% 100%;
+  }
+  75% {
+    background-position: 0% 100%;
+  }
+}

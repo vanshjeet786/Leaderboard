@@ -1,0 +1,19 @@
+# Dependency directories
+node_modules/
+gaming-leaderboard/node_modules/
+gaming-leaderboard/dist/
+
+# Env files
+.env
+gaming-leaderboard/.env
+
+# Logs
+*.log
+npm-debug.log*
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Supabase temporary files
+supabase/.temp/

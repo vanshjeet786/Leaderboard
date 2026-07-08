@@ -27,6 +27,30 @@ serve(async (req) => {
       })
     }
 
+    // T11: Type checks — game_id and player_id must be strings
+    if (typeof game_id !== 'string' || typeof player_id !== 'string') {
+      return new Response(JSON.stringify({ error: "game_id and player_id must be strings" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      })
+    }
+
+    // T11: Length validation — game_id and player_id must be <= 20 characters
+    if (game_id.length > 20 || player_id.length > 20) {
+      return new Response(JSON.stringify({ error: "game_id and player_id must be 20 characters or fewer" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      })
+    }
+
+    // T11: Max score validation — score must be <= 1 billion
+    if (score > 1_000_000_000) {
+      return new Response(JSON.stringify({ error: "score must not exceed 1000000000" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      })
+    }
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''

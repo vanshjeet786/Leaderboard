@@ -1,66 +1,177 @@
-CREATE TABLE "Game_ID" (
-    "Game_ID" TEXT
+-- ============================================================
+-- Gaming Leaderboard — Full Schema
+-- ============================================================
+
+-- 1. Tables
+-- ------------------------------------------------------------
+
+CREATE TABLE games (
+    id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    game_code   TEXT        UNIQUE NOT NULL,
+    game_name   TEXT        NOT NULL,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE "Leaderboard_records" (
-    "UUID" UUID,
-    "Player_ID" TEXT,
-    "Game_ID" TEXT,
-    "Display name" TEXT,
-    "Score" BIGINT,
-    "Created at" TIMESTAMP,
-    "Edited_At" TIMESTAMP,
-    UNIQUE ("Player_ID", "Game_ID")
+CREATE TABLE players (
+    id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    player_code  TEXT        UNIQUE NOT NULL,
+    display_name TEXT        NOT NULL,
+    created_at   TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE OR REPLACE FUNCTION create_game_id("GAME_ID" TEXT, "LIMIT" INTEGER)
+CREATE TABLE leaderboard_entries (
+    id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    game_id     UUID        NOT NULL REFERENCES games(id),
+    player_id   UUID        NOT NULL REFERENCES players(id),
+    score       BIGINT      NOT NULL DEFAULT 0,
+    saved_at    TIMESTAMPTZ DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (game_id, player_id)
+);
+
+-- 2. Indexes
+-- ------------------------------------------------------------
+
+CREATE INDEX idx_leaderboard_game_score
+    ON leaderboard_entries (game_id, score DESC);
+
+-- 3. RPCs (Optimized — Phase 5)
+-- ------------------------------------------------------------
+
+-- submit_score_by_code
+-- Upserts a score for a player in a game using their codes.
+-- Returns 'inserted', 'updated', or 'ignored'.
+CREATE OR REPLACE FUNCTION submit_score_by_code(
+    in_game_code   TEXT,
+    in_player_code TEXT,
+    in_score       BIGINT
+)
 RETURNS TEXT
 LANGUAGE plpgsql
 AS $$
-BEGIN
-    INSERT INTO "Game_ID" ("Game_ID")
-    VALUES ("GAME_ID");
-    RETURN "GAME_ID";
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION edit_scores(
-    "In_Game_ID" TEXT,
-    "In_Score" BIGINT,
-    "In_Player_ID" TEXT
-)
-RETURNS TABLE (
-    "Updated Score" BIGINT,
-    "Game_ID" TEXT,
-    "Player_ID" TEXT
-)
-LANGUAGE plpgsql
-AS $$
 DECLARE
-    current_score BIGINT;
+    v_game_id   UUID;
+    v_player_id UUID;
+    v_result    leaderboard_entries;
 BEGIN
-    SELECT "Score" INTO current_score
-    FROM "Leaderboard_records"
-    WHERE "Leaderboard_records"."Player_ID" = "In_Player_ID"
-      AND "Leaderboard_records"."Game_ID" = "In_Game_ID";
+    -- Look up game
+    SELECT id INTO v_game_id
+    FROM games
+    WHERE game_code = in_game_code;
 
     IF NOT FOUND THEN
-        INSERT INTO "Leaderboard_records" ("Game_ID", "Player_ID", "Score")
-        VALUES ("In_Game_ID", "In_Player_ID", "In_Score");
-    ELSIF "In_Score" > current_score THEN
-        UPDATE "Leaderboard_records"
-        SET "Score" = "In_Score"
-        WHERE "Leaderboard_records"."Player_ID" = "In_Player_ID"
-          AND "Leaderboard_records"."Game_ID" = "In_Game_ID";
+        RAISE EXCEPTION 'Game not found: %', in_game_code;
     END IF;
 
-    RETURN QUERY
-    SELECT
-        lr."Score",
-        lr."Game_ID",
-        lr."Player_ID"
-    FROM "Leaderboard_records" lr
-    WHERE lr."Game_ID" = "In_Game_ID"
-      AND lr."Player_ID" = "In_Player_ID";
+    -- Look up player
+    SELECT id INTO v_player_id
+    FROM players
+    WHERE player_code = in_player_code;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Player not found: %', in_player_code;
+    END IF;
+
+    -- Upsert with GREATEST to keep the highest score
+    INSERT INTO leaderboard_entries (game_id, player_id, score)
+    VALUES (v_game_id, v_player_id, in_score)
+    ON CONFLICT (game_id, player_id)
+    DO UPDATE SET
+        score      = GREATEST(leaderboard_entries.score, EXCLUDED.score),
+        updated_at = CASE
+                        WHEN EXCLUDED.score > leaderboard_entries.score THEN NOW()
+                        ELSE leaderboard_entries.updated_at
+                     END
+    RETURNING * INTO v_result;
+
+    -- Determine what happened
+    IF v_result.xmax = 0 THEN
+        RETURN 'inserted';
+    ELSIF v_result.score = in_score THEN
+        RETURN 'updated';
+    ELSE
+        RETURN 'ignored';
+    END IF;
 END;
 $$;
+
+-- get_game_leaderboard_by_code
+-- Returns the top N players for a game, ranked by score descending.
+-- Uses LANGUAGE sql STABLE for better optimizer inlining.
+CREATE OR REPLACE FUNCTION get_game_leaderboard_by_code(
+    in_game_code TEXT,
+    in_limit     INTEGER DEFAULT 10
+)
+RETURNS TABLE (
+    rank         BIGINT,
+    player_id    TEXT,
+    display_name TEXT,
+    score        BIGINT,
+    updated_at   TIMESTAMPTZ
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+AS $$
+    SELECT
+        ROW_NUMBER() OVER (ORDER BY le.score DESC) AS rank,
+        p.player_code  AS player_id,
+        p.display_name,
+        le.score,
+        le.updated_at
+    FROM leaderboard_entries le
+    JOIN players p ON p.id = le.player_id
+    JOIN games   g ON g.id = le.game_id
+    WHERE g.game_code = in_game_code
+    ORDER BY le.score DESC
+    LIMIT in_limit;
+$$;
+
+-- 4. Seed Data
+-- ------------------------------------------------------------
+
+-- Games (G001–G010)
+INSERT INTO games (game_code, game_name) VALUES
+    ('G001', 'Space Invaders Redux'),
+    ('G002', 'Cyber Runner'),
+    ('G003', 'Dungeon Master'),
+    ('G004', 'Pixel Warriors'),
+    ('G005', 'Neon Drift'),
+    ('G006', 'Shadow Realm'),
+    ('G007', 'Quantum Break'),
+    ('G008', 'Storm Chaser'),
+    ('G009', 'Rogue Planet'),
+    ('G010', 'Final Frontier');
+
+-- Players (P001–P030)
+INSERT INTO players (player_code, display_name) VALUES
+    ('P001', 'AcePilot'),
+    ('P002', 'BladeRunner'),
+    ('P003', 'CyberGhost'),
+    ('P004', 'DarkMatter'),
+    ('P005', 'EchoStrike'),
+    ('P006', 'FrostByte'),
+    ('P007', 'GhostRider'),
+    ('P008', 'HyperNova'),
+    ('P009', 'IronClad'),
+    ('P010', 'JetStream'),
+    ('P011', 'KnightFall'),
+    ('P012', 'LaserWolf'),
+    ('P013', 'MoonWalker'),
+    ('P014', 'NightHawk'),
+    ('P015', 'OmegaForce'),
+    ('P016', 'PhantomX'),
+    ('P017', 'QuantumLeap'),
+    ('P018', 'RazorEdge'),
+    ('P019', 'ShadowFox'),
+    ('P020', 'ThunderBolt'),
+    ('P021', 'UltraViolet'),
+    ('P022', 'VortexKing'),
+    ('P023', 'WarpDrive'),
+    ('P024', 'XenonBlade'),
+    ('P025', 'YellowFlash'),
+    ('P026', 'ZeroGravity'),
+    ('P027', 'Alpha'),
+    ('P028', 'Bravo'),
+    ('P029', 'Charlie'),
+    ('P030', 'Delta');
